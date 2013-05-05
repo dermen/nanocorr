@@ -12,7 +12,7 @@ atom3       = np.array( [a/2.,  a/2.,    0.] )
 atoms       = np.vstack(  ( atom0, atom1, atom2, atom3 )  )
 num_atoms   = atoms.shape[0]
 
-size_in_nm  = float ( input("size in nm: " ) ) 
+size_in_nm  = float ( input("size [diameter] in nm: " ) ) 
 
 size_in_ang = size_in_nm * 10.
 
