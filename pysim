@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+#!/mnt/work/dermen/epd/bin/python2.7
 """
 Randomly places molecules in space with a certain density, Boltzmann distribution and computes the scattering in the concentrated limit.
 This method does not use cython-made c wrappers, instead it relies on numpy and will therefore have horrible memory mangement. BEWARE if you are trying to simulate a big system, as you might not have enough RAM!
@@ -9,12 +8,12 @@ This method does not compute exact atomic form factors but instead approximates 
 import os
 import numpy as np
 from scipy.spatial import Delaunay
+import argparse
 
-from odin.scatter import atomic_formfactor as AF
-from odin.utils import odinparser
-from odin.xray import _q_grid_as_xyz as QXYZ
-from odin.xray import Beam,Rings
-from odin.structure import rand_rotate_molecule2, load_coor, remove_COM
+from odin.xray.scatter import atomic_formfactor as AF
+from odin.xray.xray import _q_grid_as_xyz as QXYZ
+from odin.xray.xray import Beam,Rings
+from odin.xray.structure import rand_rotate_molecule2, load_coor, remove_COM
 
 
 def locate(xyz, num_replicas, density):
@@ -245,6 +244,8 @@ def main(num_shot, traj, num_mol, dens, energy, qs, num_phi, vac, outfile, dist=
         FF[i_q] =  AF( 79, qs[i_q] ).astype(np.complex128)
 
     if dilute:
+        outfile = os.path.join( os.path.dirname(outfile) , \
+                    'dilu-' + os.path.basename(outfile ) )
         for i_shot in xrange( num_shot ) :
             print "computing shot number",i_shot
             scatter    = np.zeros( ( num_q, num_phi)  )
@@ -256,11 +257,12 @@ def main(num_shot, traj, num_mol, dens, energy, qs, num_phi, vac, outfile, dist=
             
             intens[i_shot] =  scatter 
         
-        r = Rings (qs, intens, Beam(-1,energy=energy).k )
-        outfile = os.path.join( os.path.dirname(outfile) , 'dilu-' + os.path.basename(outfile ) )
-        r.save( outfile)
+            r = Rings (qs, intens[:i_shot], Beam(-1,energy=energy).k )
+            r.save( outfile, force=1)
 
     else:
+        outfile = os.path.join( os.path.dirname(outfile) , \
+                    'conc-' + os.path.basename(outfile ) )
         for i_shot in xrange( num_shot ) :
             amps    = np.zeros( ( num_q, num_phi) , dtype=np.complex128 )
             print "computing shot number",i_shot
@@ -273,9 +275,8 @@ def main(num_shot, traj, num_mol, dens, energy, qs, num_phi, vac, outfile, dist=
             
             intens[i_shot] =  np.abs( amps ) **2 
         
-        r = Rings (qs, intens, Beam(-1,energy=energy).k )
-        outfile = os.path.join( os.path.dirname(outfile) , 'conc-' + os.path.basename(outfile ) )
-        r.save( outfile)
+            r = Rings (qs, intens[:i_shot], Beam(-1,energy=energy).k )
+            r.save( outfile, force=1)
 
 def amplitudes( qvec,  xyz , FF,num_q,num_phi):
     """
@@ -302,19 +303,32 @@ def amplitudes( qvec,  xyz , FF,num_q,num_phi):
         the scattering amplitudes.
     """
     
-    amp = np.zeros( (num_q, num_phi), dtype=np.complex128  )
+    amplitude = np.zeros( (num_q, num_phi), dtype=np.complex128  )
     
+#   in order to manage memory properly, we will step through the molecule in #  atomic groups of 5000
+    num_steps = xyz.shape[0] / 5000
+    last_step = xyz.shape[0] % 5000
+
     for i_q in xrange( num_q ):
-        amps = np.dot( qvec[i_q], xyz.T )
-        amps = np.exp(  1j * amps  )
-        amps = np.sum( amps, axis = 1 ) # approximates form factor using nitrogen
-        amp[i_q,:]  =  FF[i_q] * amps 
-    return amp
+        for i_step in xrange( num_steps ):
+            amps = np.dot( qvec[i_q], xyz[i_step*5000:(i_step+1)*5000].T )
+            amps = np.exp(  1j * amps  )
+            amps = np.sum( amps, axis = 1 )
+            amplitude[i_q,:]  +=  FF[i_q] * amps
+
+        if last_step > 0:
+            amps = np.dot( qvec[i_q], xyz[-last_step:].T )
+            amps = np.exp(  1j * amps  )
+            amps = np.sum( amps, axis = 1 )
+            amplitude[i_q,:]  +=  FF[i_q] * amps
+
+    return amplitude
 
 
 if __name__ == '__main__':
     
-    parser = odinparser('Make a odin .ring file containing the scattering from a system of molecules in the concentrated limit.')
+    parser = argparse.ArgumentParser()#desription=
+                #'Make a odin .ring file containing the scattering from a system of molecules in the concentrated limit.')
     
     parser.add_argument('-i', '--input', type=str, 
                         help='A .coor file containing the atomic positions of a single molecule.')
@@ -350,7 +364,7 @@ if __name__ == '__main__':
                         help='Will attempt to distort the nano particles.')
 
     args = parser.parse_args()
-    
+   
     if args.input.endswith('.coor') or args.input.endswith('.xyz'):
         input_traj = load_coor( args.input) # loads xyz in nm
     else:
