@@ -1,4 +1,4 @@
-#!/mnt/work/dermen/epd/bin/python2.7
+#!/data/ana/epd/bin/python2.7
 """
 Randomly places molecules in space with a certain density, Boltzmann distribution and computes the scattering in the concentrated limit.
 This method does not use cython-made c wrappers, instead it relies on numpy and will therefore have horrible memory mangement. BEWARE if you are trying to simulate a big system, as you might not have enough RAM!
@@ -10,10 +10,10 @@ import numpy as np
 from scipy.spatial import Delaunay
 import argparse
 
-from odin.xray.scatter import atomic_formfactor as AF
-from odin.xray.xray import _q_grid_as_xyz as QXYZ
-from odin.xray.xray import Beam,Rings
-from odin.xray.structure import rand_rotate_molecule2, load_coor, remove_COM
+from thor.scatter import atomic_formfactor as AF
+from thor.xray import _q_grid_as_xyz as QXYZ
+from thor.xray import Beam,Rings
+from thor.structure import rand_rotate_molecule2, load_coor, remove_COM
 
 
 def locate(xyz, num_replicas, density):
